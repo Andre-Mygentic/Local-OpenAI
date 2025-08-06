@@ -148,7 +148,6 @@ def chat_completion(messages, model, temperature, max_tokens, streaming=True):
             full_response = ""
             chunk_count = 0
             is_thinking = True
-            thinking_marker_sent = False
             try:
                 for line in response.iter_lines(decode_unicode=True):
                     if line:
@@ -158,12 +157,11 @@ def chat_completion(messages, model, temperature, max_tokens, streaming=True):
                                 message = chunk["message"]
                                 # Check if this is a thinking message (has thinking field)
                                 if "thinking" in message:
-                                    # Model is thinking, don't display this
+                                    # Model is thinking, send the actual thinking content
                                     is_thinking = True
-                                    # Send thinking marker only once
-                                    if not thinking_marker_sent:
-                                        yield "[THINKING]"
-                                        thinking_marker_sent = True
+                                    thinking_text = message.get("thinking", "")
+                                    # Send the actual thinking content
+                                    yield f"[THINKING]{thinking_text}"
                                 elif "content" in message:
                                     # We have actual content to display (no thinking field)
                                     content = message["content"]
@@ -245,10 +243,10 @@ with st.sidebar:
     st.session_state.max_tokens = st.number_input(
         "Max Tokens",
         min_value=100,
-        max_value=8000,
+        max_value=16000,
         value=st.session_state.max_tokens,
         step=100,
-        help="Maximum number of tokens to generate"
+        help="Maximum number of tokens to generate (increase if responses are cut off)"
     )
     
     st.session_state.streaming = st.checkbox(
@@ -352,21 +350,32 @@ else:
                 )
                 
                 # Show thinking indicator initially
-                thinking_shown = False
+                thinking_content = ""
+                showing_thinking = False
                 for chunk in response_generator:
                     if isinstance(chunk, str):
-                        if chunk == "[THINKING]":
-                            # Show thinking message
-                            if not thinking_shown:
-                                message_placeholder.markdown("*🤔 Thinking...*")
-                                thinking_shown = True
+                        if chunk.startswith("[THINKING]"):
+                            # Extract and accumulate thinking content
+                            thinking_text = chunk[10:]  # Remove "[THINKING]" prefix
+                            thinking_content += thinking_text
+                            # Show the actual thinking process
+                            if not showing_thinking:
+                                message_placeholder.markdown(f"*🤔 Thinking: {thinking_content}*")
+                                showing_thinking = True
+                            else:
+                                message_placeholder.markdown(f"*🤔 Thinking: {thinking_content}*")
                         elif chunk:  # Actual content
+                            # Clear thinking and show actual response
+                            showing_thinking = False
                             full_response += chunk
                             message_placeholder.markdown(full_response + "▌")
                 
                 # Final display without cursor
                 if full_response:
                     message_placeholder.markdown(full_response)
+                    # Check if response might be truncated (ends abruptly)
+                    if len(full_response) > 100 and not full_response.rstrip().endswith(('.', '!', '?', '"', ')', ']', '}')):
+                        st.warning("⚠️ Response may have been truncated. Try increasing Max Tokens in the sidebar.")
                 else:
                     message_placeholder.markdown("*[No response generated - the model may still be thinking. Try asking again or reducing max tokens.]*")
             else:
