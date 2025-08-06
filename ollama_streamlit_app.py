@@ -57,7 +57,7 @@ if "model" not in st.session_state:
 if "temperature" not in st.session_state:
     st.session_state.temperature = 0.7
 if "max_tokens" not in st.session_state:
-    st.session_state.max_tokens = 1000
+    st.session_state.max_tokens = 3000
 if "streaming" not in st.session_state:
     st.session_state.streaming = True
 
@@ -148,6 +148,7 @@ def chat_completion(messages, model, temperature, max_tokens, streaming=True):
             full_response = ""
             chunk_count = 0
             is_thinking = True
+            thinking_marker_sent = False
             try:
                 for line in response.iter_lines(decode_unicode=True):
                     if line:
@@ -155,12 +156,16 @@ def chat_completion(messages, model, temperature, max_tokens, streaming=True):
                             chunk = json.loads(line)
                             if "message" in chunk:
                                 message = chunk["message"]
-                                # Check if we're still in thinking phase
-                                if "thinking" in message and "content" in message:
-                                    # Model is thinking, content is empty
+                                # Check if this is a thinking message (has thinking field)
+                                if "thinking" in message:
+                                    # Model is thinking, don't display this
                                     is_thinking = True
+                                    # Send thinking marker only once
+                                    if not thinking_marker_sent:
+                                        yield "[THINKING]"
+                                        thinking_marker_sent = True
                                 elif "content" in message:
-                                    # We have actual content to display
+                                    # We have actual content to display (no thinking field)
                                     content = message["content"]
                                     if content is not None:
                                         is_thinking = False
@@ -350,11 +355,12 @@ else:
                 thinking_shown = False
                 for chunk in response_generator:
                     if isinstance(chunk, str):
-                        if not full_response and not thinking_shown:
-                            # Show thinking message while waiting for content
-                            message_placeholder.markdown("*🤔 Thinking...*")
-                            thinking_shown = True
-                        if chunk:  # Only update if we have actual content
+                        if chunk == "[THINKING]":
+                            # Show thinking message
+                            if not thinking_shown:
+                                message_placeholder.markdown("*🤔 Thinking...*")
+                                thinking_shown = True
+                        elif chunk:  # Actual content
                             full_response += chunk
                             message_placeholder.markdown(full_response + "▌")
                 
