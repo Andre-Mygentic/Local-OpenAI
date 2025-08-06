@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+ollama_ui_env/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Streamlit
+.streamlit/
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Ollama
+*.gguf
+models/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
