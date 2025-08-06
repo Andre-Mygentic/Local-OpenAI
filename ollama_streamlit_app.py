@@ -146,23 +146,46 @@ def chat_completion(messages, model, temperature, max_tokens, streaming=True):
         
         if streaming:
             full_response = ""
+            chunk_count = 0
+            is_thinking = True
             try:
                 for line in response.iter_lines(decode_unicode=True):
                     if line:
                         try:
                             chunk = json.loads(line)
-                            if "message" in chunk and "content" in chunk["message"]:
-                                content = chunk["message"]["content"]
-                                full_response += content
-                                yield content
+                            if "message" in chunk:
+                                message = chunk["message"]
+                                # Check if we're still in thinking phase
+                                if "thinking" in message and "content" in message:
+                                    # Model is thinking, content is empty
+                                    is_thinking = True
+                                elif "content" in message:
+                                    # We have actual content to display
+                                    content = message["content"]
+                                    if content is not None:
+                                        is_thinking = False
+                                        full_response += content
+                                        chunk_count += 1
+                                        yield content
                             # Check if response is done
                             if chunk.get("done", False):
+                                # Log for debugging
+                                print(f"Stream complete. Chunks: {chunk_count}, Total length: {len(full_response)}, Was thinking: {is_thinking}")
+                                # If we got no content but finished, it might be all in thinking
+                                if not full_response and "message" in chunk:
+                                    # Check if there's a final message with content
+                                    final_content = chunk.get("message", {}).get("content", "")
+                                    if final_content:
+                                        full_response = final_content
+                                        yield final_content
                                 break
-                        except json.JSONDecodeError:
+                        except json.JSONDecodeError as e:
+                            print(f"JSON decode error: {e}, Line: {line}")
                             continue
             except requests.exceptions.Timeout:
                 yield "\n\n[Response truncated due to timeout. Try reducing max tokens or disabling streaming.]"
             except Exception as stream_error:
+                print(f"Streaming error: {stream_error}")
                 yield f"\n\n[Streaming error: {str(stream_error)}]"
             return full_response
         else:
@@ -323,11 +346,23 @@ else:
                     streaming=True
                 )
                 
+                # Show thinking indicator initially
+                thinking_shown = False
                 for chunk in response_generator:
-                    full_response += chunk
-                    message_placeholder.markdown(full_response + "▌")
+                    if isinstance(chunk, str):
+                        if not full_response and not thinking_shown:
+                            # Show thinking message while waiting for content
+                            message_placeholder.markdown("*🤔 Thinking...*")
+                            thinking_shown = True
+                        if chunk:  # Only update if we have actual content
+                            full_response += chunk
+                            message_placeholder.markdown(full_response + "▌")
                 
-                message_placeholder.markdown(full_response)
+                # Final display without cursor
+                if full_response:
+                    message_placeholder.markdown(full_response)
+                else:
+                    message_placeholder.markdown("*[No response generated - the model may still be thinking. Try asking again or reducing max tokens.]*")
             else:
                 # Non-streaming response
                 with st.spinner("Thinking..."):
