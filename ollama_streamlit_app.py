@@ -83,24 +83,44 @@ def generate_response(prompt, model, temperature, max_tokens, streaming=True):
         "prompt": prompt,
         "temperature": temperature,
         "options": {
-            "num_predict": max_tokens
+            "num_predict": max_tokens,
+            "num_ctx": 4096  # Add context window
         },
-        "stream": streaming
+        "stream": streaming,
+        "keep_alive": "5m"  # Keep model loaded for 5 minutes
     }
     
     try:
-        response = requests.post(url, json=payload, stream=streaming)
+        # Increase timeout for larger responses
+        timeout = (10, 300) if streaming else 300  # (connect timeout, read timeout)
+        response = requests.post(url, json=payload, stream=streaming, timeout=timeout)
+        
         if streaming:
             full_response = ""
-            for line in response.iter_lines():
-                if line:
-                    chunk = json.loads(line)
-                    if "response" in chunk:
-                        full_response += chunk["response"]
-                        yield chunk["response"]
+            try:
+                for line in response.iter_lines(decode_unicode=True):
+                    if line:
+                        try:
+                            chunk = json.loads(line)
+                            if "response" in chunk:
+                                full_response += chunk["response"]
+                                yield chunk["response"]
+                            # Check if response is done
+                            if chunk.get("done", False):
+                                break
+                        except json.JSONDecodeError:
+                            continue
+            except requests.exceptions.Timeout:
+                yield "\n\n[Response truncated due to timeout. Try reducing max tokens or disabling streaming.]"
+            except Exception as stream_error:
+                yield f"\n\n[Streaming error: {str(stream_error)}]"
             return full_response
         else:
             return response.json().get("response", "Error: No response")
+    except requests.exceptions.Timeout:
+        return "Error: Request timed out. The model may be processing a long response. Try reducing max tokens or enabling streaming."
+    except requests.exceptions.ConnectionError:
+        return "Error: Cannot connect to Ollama. Please ensure Ollama is running (brew services start ollama)"
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -112,25 +132,45 @@ def chat_completion(messages, model, temperature, max_tokens, streaming=True):
         "messages": messages,
         "temperature": temperature,
         "options": {
-            "num_predict": max_tokens
+            "num_predict": max_tokens,
+            "num_ctx": 4096  # Add context window
         },
-        "stream": streaming
+        "stream": streaming,
+        "keep_alive": "5m"  # Keep model loaded for 5 minutes
     }
     
     try:
-        response = requests.post(url, json=payload, stream=streaming)
+        # Increase timeout for larger responses
+        timeout = (10, 300) if streaming else 300  # (connect timeout, read timeout)
+        response = requests.post(url, json=payload, stream=streaming, timeout=timeout)
+        
         if streaming:
             full_response = ""
-            for line in response.iter_lines():
-                if line:
-                    chunk = json.loads(line)
-                    if "message" in chunk and "content" in chunk["message"]:
-                        content = chunk["message"]["content"]
-                        full_response += content
-                        yield content
+            try:
+                for line in response.iter_lines(decode_unicode=True):
+                    if line:
+                        try:
+                            chunk = json.loads(line)
+                            if "message" in chunk and "content" in chunk["message"]:
+                                content = chunk["message"]["content"]
+                                full_response += content
+                                yield content
+                            # Check if response is done
+                            if chunk.get("done", False):
+                                break
+                        except json.JSONDecodeError:
+                            continue
+            except requests.exceptions.Timeout:
+                yield "\n\n[Response truncated due to timeout. Try reducing max tokens or disabling streaming.]"
+            except Exception as stream_error:
+                yield f"\n\n[Streaming error: {str(stream_error)}]"
             return full_response
         else:
             return response.json().get("message", {}).get("content", "Error: No response")
+    except requests.exceptions.Timeout:
+        return "Error: Request timed out. The model may be processing a long response. Try reducing max tokens or enabling streaming."
+    except requests.exceptions.ConnectionError:
+        return "Error: Cannot connect to Ollama. Please ensure Ollama is running (brew services start ollama)"
     except Exception as e:
         return f"Error: {str(e)}"
 
