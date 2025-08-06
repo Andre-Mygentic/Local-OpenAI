@@ -1,6 +1,6 @@
-# 🤖 OpenAI GPT-OSS 20B - Run Locally on Mac
+# 🤖 OpenAI GPT-OSS 20B - Run OPEN AI Locally!
 
-Run OpenAI's powerful GPT-OSS 20B model locally on your Mac with a beautiful Streamlit UI. One-click installation, no cloud required, 100% private.
+Finally, truly OPEN AI! Run OpenAI's powerful GPT-OSS 20B model locally on your machine with a beautiful Streamlit UI. One-click installation, no cloud required, 100% private.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)
