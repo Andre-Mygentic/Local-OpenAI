@@ -56,6 +56,8 @@ if "model" not in st.session_state:
     st.session_state.model = "gpt-oss:20b"
 if "temperature" not in st.session_state:
     st.session_state.temperature = 0.7
+if "reasoning_effort" not in st.session_state:
+    st.session_state.reasoning_effort = "medium"
 if "max_tokens" not in st.session_state:
     st.session_state.max_tokens = 3000
 if "streaming" not in st.session_state:
@@ -124,16 +126,25 @@ def generate_response(prompt, model, temperature, max_tokens, streaming=True):
     except Exception as e:
         return f"Error: {str(e)}"
 
-def chat_completion(messages, model, temperature, max_tokens, streaming=True):
+def chat_completion(messages, model, temperature, max_tokens, streaming=True, reasoning_effort="medium"):
     """Chat completion with conversation history"""
     url = f"{OLLAMA_API_BASE}/api/chat"
+    
+    # Map reasoning effort to specific values for Ollama
+    reasoning_map = {
+        "low": {"num_thinking_tokens": 1000},
+        "medium": {"num_thinking_tokens": 5000},
+        "high": {"num_thinking_tokens": 10000}
+    }
+    
     payload = {
         "model": model,
         "messages": messages,
         "temperature": temperature,
         "options": {
             "num_predict": max_tokens,
-            "num_ctx": 4096  # Add context window
+            "num_ctx": 4096,  # Add context window
+            **reasoning_map.get(reasoning_effort, reasoning_map["medium"])  # Add reasoning tokens
         },
         "stream": streaming,
         "keep_alive": "5m"  # Keep model loaded for 5 minutes
@@ -240,6 +251,22 @@ with st.sidebar:
         help="Higher values make output more random"
     )
     
+    # Reasoning effort control
+    st.session_state.reasoning_effort = st.select_slider(
+        "Reasoning Effort",
+        options=["low", "medium", "high"],
+        value=st.session_state.reasoning_effort,
+        help="Controls depth of model thinking. Higher = better quality but slower"
+    )
+    
+    # Show current selection
+    if st.session_state.reasoning_effort == "low":
+        st.caption("🟢 **Low** — Fast responses, basic reasoning")
+    elif st.session_state.reasoning_effort == "medium":
+        st.caption("🟡 **Medium** — Balanced speed and quality")
+    else:  # high
+        st.caption("🔴 **High** — Deep thinking, best quality")
+    
     st.session_state.max_tokens = st.number_input(
         "Max Tokens",
         min_value=100,
@@ -273,11 +300,21 @@ with st.sidebar:
     
     # Model info
     st.subheader("Model Info")
+    
+    # Reasoning effort indicator
+    effort_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}
+    effort_desc = {
+        "low": "Fast responses, basic reasoning",
+        "medium": "Balanced speed and quality", 
+        "high": "Deep thinking, best quality"
+    }
+    
     st.info(f"""
     **Current Model:** {st.session_state.model}
     **Size:** 13GB (quantized)
     **Parameters:** 20B
     **Architecture:** Transformer
+    **Reasoning:** {effort_emoji[st.session_state.reasoning_effort]} {st.session_state.reasoning_effort.capitalize()} - {effort_desc[st.session_state.reasoning_effort]}
     """)
     
     # Performance stats
@@ -346,7 +383,8 @@ else:
                     st.session_state.model,
                     st.session_state.temperature,
                     st.session_state.max_tokens,
-                    streaming=True
+                    streaming=True,
+                    reasoning_effort=st.session_state.reasoning_effort
                 )
                 
                 # Show thinking indicator initially
@@ -386,7 +424,8 @@ else:
                         st.session_state.model,
                         st.session_state.temperature,
                         st.session_state.max_tokens,
-                        streaming=False
+                        streaming=False,
+                        reasoning_effort=st.session_state.reasoning_effort
                     )
                 message_placeholder.markdown(full_response)
             
